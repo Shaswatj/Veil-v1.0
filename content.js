@@ -634,13 +634,7 @@ function observeMainVideoReplacement() {
       return;
     }
 
-    const player = document.querySelector('#player');
-    const playerContainerOuter = player
-      ? Array.from(player.children).find((child) => child.id === 'player-container-outer')
-      : null;
-    if (player && playerContainerOuter && (backdrop.parentElement !== player || backdrop.nextElementSibling !== playerContainerOuter)) {
-      player.insertBefore(backdrop, playerContainerOuter);
-    }
+    placeBackdrop(backdrop);
 
     const currentMainVideo = getCurrentMainYouTubeVideo();
     if (!currentMainVideo) {
@@ -661,7 +655,7 @@ function observeMainVideoReplacement() {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['src', 'class', 'id']
+    attributeFilter: ['src', 'class', 'id', 'style']
   });
 
   console.log('[Backdrop Diagnostic] Main YouTube video replacement observer attached');
@@ -1706,17 +1700,40 @@ function removeBackdrop() {
   console.log('Backdrop video removed.');
 }
 
-function createBackdrop() {
-  const existingBackdrop = document.getElementById(BACKDROP_ID);
+function placeBackdrop(backdrop) {
   const player = document.querySelector('#player');
   const playerContainerOuter = player
     ? Array.from(player.children).find((child) => child.id === 'player-container-outer')
     : null;
+  const playerIsRendered = player &&
+    window.getComputedStyle(player).display !== 'none' &&
+    player.getClientRects().length > 0;
 
-  if (existingBackdrop) {
-    if (player && playerContainerOuter && (existingBackdrop.parentElement !== player || existingBackdrop.nextElementSibling !== playerContainerOuter)) {
-      player.insertBefore(existingBackdrop, playerContainerOuter);
+  if (playerIsRendered && playerContainerOuter) {
+    if (backdrop.parentElement !== player || backdrop.nextElementSibling !== playerContainerOuter) {
+      player.insertBefore(backdrop, playerContainerOuter);
     }
+    return 'player';
+  }
+
+  const pageManager = document.querySelector('#page-manager');
+  if (pageManager) {
+    if (backdrop.parentElement !== pageManager || backdrop !== pageManager.firstChild) {
+      pageManager.insertBefore(backdrop, pageManager.firstChild);
+    }
+    return 'page-manager';
+  }
+
+  if (backdrop.parentElement !== document.body) {
+    document.body.appendChild(backdrop);
+  }
+  return 'body';
+}
+
+function createBackdrop() {
+  const existingBackdrop = document.getElementById(BACKDROP_ID);
+  if (existingBackdrop) {
+    placeBackdrop(existingBackdrop);
     return existingBackdrop;
   }
 
@@ -1737,18 +1754,13 @@ function createBackdrop() {
   backdrop.style.opacity = '0.5';
   backdrop.style.display = 'block';
 
-  if (player && playerContainerOuter) {
-    player.insertBefore(backdrop, playerContainerOuter);
-    console.log('[Backdrop Diagnostic] backdrop.parentElement === #player, before #player-container-outer:', backdrop.parentElement === player);
+  const placement = placeBackdrop(backdrop);
+  if (placement === 'player') {
+    console.log('[Backdrop Diagnostic] backdrop.parentElement === #player, before #player-container-outer:', backdrop.parentElement === document.querySelector('#player'));
+  } else if (placement === 'page-manager') {
+    console.log('[Backdrop Diagnostic] backdrop.parentElement === #page-manager:', backdrop.parentElement === document.querySelector('#page-manager'));
   } else {
-    const pageManager = document.querySelector('#page-manager');
-    if (pageManager) {
-      pageManager.insertBefore(backdrop, pageManager.firstChild);
-      console.log('[Backdrop Diagnostic] backdrop.parentElement === #page-manager:', backdrop.parentElement === pageManager);
-    } else {
-      document.body.appendChild(backdrop);
-      console.log('[Backdrop Diagnostic] backdrop.parentElement === BODY:', backdrop.parentElement === document.body);
-    }
+    console.log('[Backdrop Diagnostic] backdrop.parentElement === BODY:', backdrop.parentElement === document.body);
   }
 
   console.log('Backdrop video created behind the page UI.');
